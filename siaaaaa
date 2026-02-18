@@ -1,0 +1,75 @@
+-- Roblox LocalScript: Ultra-Fast 1-Frame Camera Flick Aim
+-- Place this LocalScript in StarterPlayer > StarterPlayerScripts
+-- Way faster than original: Visible for exactly 1 frame (~16ms at 60FPS)
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = workspace
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+local FLICK_FRAMES = 3 -- Number of frames to show flick (1 = ultra-fast)
+local MAX_DISTANCE = math.huge -- Max target distance
+
+local function getClosestEnemy()
+    local closestPlayer = nil
+    local closestDistance = MAX_DISTANCE
+    local cameraPosition = Camera.CFrame.Position
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Team ~= LocalPlayer.Team then
+            local character = player.Character
+            if character then
+                local head = character:FindFirstChild("Head")
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                if head and humanoid and humanoid.Health > 0 then
+                    local headPosition = head.Position
+                    local distance = (cameraPosition - headPosition).Magnitude
+                    if distance < closestDistance then
+                        local raycastParams = RaycastParams.new()
+                        raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+                        raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
+                        
+                        local raycastResult = Workspace:Raycast(cameraPosition, (headPosition - cameraPosition), raycastParams)
+                        
+                        local clearLOS = not raycastResult or raycastResult.Instance:IsDescendantOf(character)
+                        
+                        if clearLOS then
+                            closestDistance = distance
+                            closestPlayer = player
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local targetPlayer = getClosestEnemy()
+        if targetPlayer then
+            local originalCFrame = Camera.CFrame
+            local cameraPosition = originalCFrame.Position
+            local headPosition = targetPlayer.Character.Head.Position
+            
+            -- Ultra-fast flick: Snap to head
+            local flickCFrame = CFrame.lookAt(cameraPosition, headPosition)
+            Camera.CFrame = flickCFrame
+            
+            -- Reset after exactly FLICK_FRAMES (1 frame for minimal visibility)
+            task.spawn(function()
+                for i = 1, FLICK_FRAMES do
+                    RunService.RenderStepped:Wait()
+                end
+                Camera.CFrame = originalCFrame
+            end)
+        end
+    end
+end)
